@@ -1,0 +1,93 @@
+---
+title: "ALS Data Engineering Exercise Code"
+output: html_document
+---
+
+```{r}
+#Ensure that the following packages are installed and call each library
+library(tidyverse)
+library(dplyr)
+library(data.table)
+library(lubridate)
+```
+
+```{r}
+#Save the constituent information csv as a data frame named info
+info <- fread("https://als-hiring.s3.amazonaws.com/fake_data/2020-07-01_17%3A11%3A00/cons.csv", data.table = F)
+```
+
+```{r}
+#Save the constituent email csv as a data frame named email
+email <- fread("https://als-hiring.s3.amazonaws.com/fake_data/2020-07-01_17%3A11%3A00/cons_email.csv", data.table = F)
+```
+
+```{r}
+#Save the constituent subscription status csv as a data frame named subscription
+subscription <- fread("https://als-hiring.s3.amazonaws.com/fake_data/2020-07-01_17%3A11%3A00/cons_email_chapter_subscription.csv", data.table = F)
+```
+
+```{r}
+#Include only subscription statuses where chapter_id is 1
+subscription <- subscription %>% filter(chapter_id == 1)
+```
+
+```{r}
+#Merge the email and information data sets by cons_id
+people <- merge(email, info, by = "cons_id")
+```
+
+```{r}
+#Merge the combined email and information data set with the subscription data set by cons_email_id
+#Select only primary emails  
+people <- merge(people, subscrip, by = "cons_email_id")
+people <- people %>% filter(is_primary == 1)
+```
+
+```{r}
+#Select only the variables included in the people file
+people <- people %>% select(email, source, isunsub, create_dt.y, modified_dt.y)
+```
+
+```{r}
+#Rename variables in people and convert variables to proper data type
+people <- people %>% rename(code = source, is_unsub = isunsub)
+people$is_unsub <- as.logical(people$is_unsub)
+```
+
+```{r}
+#Rename and save created_dt column as a datetime variable
+#NOTE: both the email and information data sets had a created_dt variable, this data frame uses the created_dt column from the constituent information data set
+people$created_dt <- as.POSIXct(people$create_dt.y, format="%a, %Y-%m-%d %H:%M:%S")
+```
+
+```{r}
+#Rename and save updated_dt column as a datetime variable
+#NOTE: the email,information, and subscription data sets had an updated_dt (actually called modified_dt) variable, this data frame uses the column from the constituent information data set
+people$updated_dt <- as.POSIXct(people$modified_dt.y, format="%a, %Y-%m-%d %H:%M:%S")
+#Select only relevent columns for people file
+people <- people %>% select(email, code, is_unsub, created_dt, updated_dt)
+```
+
+```{r}
+#Write people data set as csv with header, write.csv automatially sends to the working directory
+write.csv(people,"people.csv")
+```
+
+```{r}
+#Create new data frame and acquisition_date variable as only a date rather than datetime
+people1 <- people 
+people1$acquisition_date <- as.POSIXct(people1$created_dt, format="%a, %Y-%m-%d %H:%M:%S")
+people1$acquisition_date <- format(people1$acquisition_date, format = "%Y-%m-%d")
+```
+
+```{r}
+#Create acquisition_facts table with acquisition date column and the total number of acquisitions on each day as an acquisitions column
+acquisition_facts <- people1 %>% group_by(acquisition_date) %>% summarise(acquisitions = n())
+```
+
+```{r}
+#Write acquisitions data set as csv; write.csv automatically saves to the working directory
+write.csv(acquisition_facts,"acquisition_facts.csv")
+```
+
+
